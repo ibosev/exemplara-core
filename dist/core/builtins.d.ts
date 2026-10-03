@@ -1,0 +1,13 @@
+import type { ComponentDefinition } from './types.js';
+export declare const textDefinition: ComponentDefinition;
+export declare const imageDefinition: ComponentDefinition;
+export declare const containerDefinition: ComponentDefinition;
+export declare const columnsDefinition: ComponentDefinition;
+export declare const spacerDefinition: ComponentDefinition;
+export declare const dividerDefinition: ComponentDefinition;
+export declare const tableDefinition: ComponentDefinition;
+export declare const pageBreakDefinition: ComponentDefinition;
+export declare const watermarkDefinition: ComponentDefinition;
+export declare const repeaterDefinition: ComponentDefinition;
+export declare const conditionalDefinition: ComponentDefinition;
+export declare const builtinDefinitions: ComponentDefinition[];

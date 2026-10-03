@@ -1,0 +1,69 @@
+{
+  "name": "exemplara-core",
+  "version": "0.1.0",
+  "description": "Framework-independent Exemplara document engine, renderer and Nano Stores editor sessions",
+  "license": "MIT",
+  "author": "Ivaylo Bosev",
+  "type": "module",
+  "sideEffects": false,
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "exports": {
+    ".": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
+    },
+    "./core": {
+      "types": "./dist/core/index.d.ts",
+      "import": "./dist/core/index.js"
+    },
+    "./core/*": {
+      "types": "./dist/core/*.d.ts",
+      "import": "./dist/core/*.js"
+    },
+    "./renderer": {
+      "types": "./dist/renderer/index.d.ts",
+      "import": "./dist/renderer/index.js"
+    },
+    "./renderer/*": {
+      "types": "./dist/renderer/*.d.ts",
+      "import": "./dist/renderer/*.js"
+    },
+    "./shared": {
+      "types": "./dist/shared/index.d.ts",
+      "import": "./dist/shared/index.js"
+    },
+    "./shared/*": {
+      "types": "./dist/shared/*.d.ts",
+      "import": "./dist/shared/*.js"
+    },
+    "./editor": {
+      "types": "./dist/editor/index.d.ts",
+      "import": "./dist/editor/index.js"
+    },
+    "./editor/*": {
+      "types": "./dist/editor/*.d.ts",
+      "import": "./dist/editor/*.js"
+    }
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "check": "tsc -p tsconfig.json --noEmit",
+    "test:run": "node --test tests/*.test.mjs"
+  },
+  "dependencies": {
+    "nanostores": "1.5.4"
+  },
+  "devDependencies": {
+    "typescript": "^5.9.2"
+  },
+  "engines": {
+    "node": "^20.0.0 || >=22.0.0"
+  },
+  "publishConfig": {
+    "access": "public"
+  }
+}

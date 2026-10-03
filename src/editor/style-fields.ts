@@ -1,0 +1,323 @@
+import type { ComponentNode } from "../core/types.js";
+import type { EditorSession } from "./session.js";
+
+export type EditorStyleSector =
+  | "layout"
+  | "spacing"
+  | "size"
+  | "typography"
+  | "decorations";
+
+export type EditorStyleFieldKind = "text" | "color" | "select";
+
+/** One reusable selected-element CSS control contributed by a plugin. */
+export interface EditorStyleField {
+  id: string;
+  label: string;
+  property: string;
+  sector: EditorStyleSector;
+  kind: EditorStyleFieldKind;
+  order?: number;
+  placeholder?: string;
+  options?: readonly string[];
+  visible?: (editor: EditorSession, node: ComponentNode) => boolean;
+}
+
+export const STYLE_SECTOR_LABELS: Readonly<Record<EditorStyleSector, string>> =
+  {
+    layout: "Layout",
+    spacing: "Spacing",
+    size: "Size",
+    typography: "Typography",
+    decorations: "Decorations",
+  };
+
+export const STYLE_SECTOR_ORDER: readonly EditorStyleSector[] = [
+  "layout",
+  "spacing",
+  "size",
+  "typography",
+  "decorations",
+];
+
+const imageOnly = (_editor: EditorSession, node: ComponentNode): boolean =>
+  node.type === "image" ||
+  (node.type === "html-element" &&
+    String(node.props.tagName ?? "").toLowerCase() === "img");
+
+/**
+ * CSS field catalog for the visual editor.
+ * Hosts can add more fields through `api.addStyleField()`.
+ */
+export const DEFAULT_ELEMENT_STYLE_FIELDS: readonly EditorStyleField[] = [
+  {
+    id: "display",
+    label: "Display",
+    kind: "select",
+    property: "display",
+    sector: "layout",
+    options: ["block", "flex", "inline-flex", "grid", "inline-block", "none"],
+  },
+  {
+    id: "flex-direction",
+    label: "Direction",
+    kind: "select",
+    property: "flex-direction",
+    sector: "layout",
+    options: ["row", "column", "row-reverse", "column-reverse"],
+  },
+  {
+    id: "grid-template-columns",
+    label: "Grid columns",
+    kind: "text",
+    property: "grid-template-columns",
+    sector: "layout",
+    placeholder: "repeat(3, minmax(0, 1fr))",
+  },
+  {
+    id: "justify-content",
+    label: "Justify",
+    kind: "select",
+    property: "justify-content",
+    sector: "layout",
+    options: [
+      "flex-start",
+      "center",
+      "flex-end",
+      "space-between",
+      "space-around",
+      "space-evenly",
+    ],
+  },
+  {
+    id: "align-items",
+    label: "Align",
+    kind: "select",
+    property: "align-items",
+    sector: "layout",
+    options: ["stretch", "flex-start", "center", "flex-end", "baseline"],
+  },
+  {
+    id: "gap",
+    label: "Gap",
+    kind: "text",
+    property: "gap",
+    sector: "layout",
+    placeholder: "12px",
+  },
+
+  {
+    id: "margin",
+    label: "Margin",
+    kind: "text",
+    property: "margin",
+    sector: "spacing",
+    placeholder: "0 0 16px",
+  },
+  {
+    id: "padding",
+    label: "Padding",
+    kind: "text",
+    property: "padding",
+    sector: "spacing",
+    placeholder: "16px 20px",
+  },
+
+  {
+    id: "width",
+    label: "Width",
+    kind: "text",
+    property: "width",
+    sector: "size",
+    placeholder: "100%",
+  },
+  {
+    id: "min-width",
+    label: "Min width",
+    kind: "text",
+    property: "min-width",
+    sector: "size",
+    placeholder: "0",
+  },
+  {
+    id: "max-width",
+    label: "Max width",
+    kind: "text",
+    property: "max-width",
+    sector: "size",
+    placeholder: "720px",
+  },
+  {
+    id: "height",
+    label: "Height",
+    kind: "text",
+    property: "height",
+    sector: "size",
+    placeholder: "auto",
+  },
+  {
+    id: "min-height",
+    label: "Min height",
+    kind: "text",
+    property: "min-height",
+    sector: "size",
+    placeholder: "120px",
+  },
+  {
+    id: "max-height",
+    label: "Max height",
+    kind: "text",
+    property: "max-height",
+    sector: "size",
+    placeholder: "none",
+  },
+  {
+    id: "object-fit",
+    label: "Image fit",
+    kind: "select",
+    property: "object-fit",
+    sector: "size",
+    options: ["cover", "contain", "fill", "none", "scale-down"],
+    visible: imageOnly,
+  },
+  {
+    id: "object-position",
+    label: "Image position",
+    kind: "select",
+    property: "object-position",
+    sector: "size",
+    options: [
+      "center",
+      "top",
+      "bottom",
+      "left",
+      "right",
+      "left top",
+      "right top",
+      "left bottom",
+      "right bottom",
+    ],
+    visible: imageOnly,
+  },
+  {
+    id: "aspect-ratio",
+    label: "Aspect ratio",
+    kind: "select",
+    property: "aspect-ratio",
+    sector: "size",
+    options: ["auto", "1 / 1", "4 / 5", "4 / 3", "3 / 2", "16 / 9"],
+    visible: imageOnly,
+  },
+
+  {
+    id: "font-family",
+    label: "Font family",
+    kind: "text",
+    property: "font-family",
+    sector: "typography",
+    placeholder: "Inter, sans-serif",
+  },
+  {
+    id: "font-size",
+    label: "Font size",
+    kind: "text",
+    property: "font-size",
+    sector: "typography",
+    placeholder: "16px",
+  },
+  {
+    id: "font-weight",
+    label: "Weight",
+    kind: "select",
+    property: "font-weight",
+    sector: "typography",
+    options: ["300", "400", "500", "600", "700", "800", "900"],
+  },
+  {
+    id: "line-height",
+    label: "Line height",
+    kind: "text",
+    property: "line-height",
+    sector: "typography",
+    placeholder: "1.5",
+  },
+  {
+    id: "letter-spacing",
+    label: "Letter spacing",
+    kind: "text",
+    property: "letter-spacing",
+    sector: "typography",
+    placeholder: "0.01em",
+  },
+  {
+    id: "text-align",
+    label: "Text align",
+    kind: "select",
+    property: "text-align",
+    sector: "typography",
+    options: ["left", "center", "right", "justify"],
+  },
+  {
+    id: "text-transform",
+    label: "Transform",
+    kind: "select",
+    property: "text-transform",
+    sector: "typography",
+    options: ["none", "uppercase", "lowercase", "capitalize"],
+  },
+  {
+    id: "color",
+    label: "Text color",
+    kind: "color",
+    property: "color",
+    sector: "typography",
+  },
+
+  {
+    id: "background-color",
+    label: "Background",
+    kind: "color",
+    property: "background-color",
+    sector: "decorations",
+  },
+  {
+    id: "border",
+    label: "Border",
+    kind: "text",
+    property: "border",
+    sector: "decorations",
+    placeholder: "1px solid #d7dce3",
+  },
+  {
+    id: "border-radius",
+    label: "Radius",
+    kind: "text",
+    property: "border-radius",
+    sector: "decorations",
+    placeholder: "8px",
+  },
+  {
+    id: "box-shadow",
+    label: "Shadow",
+    kind: "text",
+    property: "box-shadow",
+    sector: "decorations",
+    placeholder: "0 8px 24px rgba(0,0,0,.12)",
+  },
+  {
+    id: "opacity",
+    label: "Opacity",
+    kind: "text",
+    property: "opacity",
+    sector: "decorations",
+    placeholder: "1",
+  },
+  {
+    id: "overflow",
+    label: "Overflow",
+    kind: "select",
+    property: "overflow",
+    sector: "decorations",
+    options: ["visible", "hidden", "clip", "auto"],
+  },
+];
