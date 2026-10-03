@@ -4,6 +4,10 @@
   "description": "Framework-independent Exemplara document engine, renderer and Nano Stores editor sessions",
   "license": "MIT",
   "author": "Ivaylo Bosev",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ibosev/exemplara-core.git"
+  },
   "type": "module",
   "sideEffects": false,
   "files": [
