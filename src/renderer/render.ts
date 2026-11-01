@@ -148,6 +148,8 @@ function renderPage(
   options: RenderOptions,
   baseCtx: Omit<RenderContext, 'pageIndex' | 'totalPages'>,
 ): string {
+  // `page.guides` is editor alignment data. It is intentionally unread here
+  // so a generated page cannot draw those lines.
   const ctx: RenderContext = {
     ...baseCtx,
     pageIndex,

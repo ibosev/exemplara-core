@@ -69,9 +69,9 @@ export interface EditorKeyInput {
 }
 
 export interface EditorActionRegistry<TEditor = EditorSession, TIcon = string> {
-  addCommand(command: EditorCommandDefinition<TEditor, TIcon>): void;
-  addMenuItem(item: EditorMenuItemDefinition<TEditor>): void;
-  addKeybinding(keybinding: EditorKeybindingDefinition<TEditor>): void;
+  addCommand(command: EditorCommandDefinition<TEditor, TIcon>): () => void;
+  addMenuItem(item: EditorMenuItemDefinition<TEditor>): () => void;
+  addKeybinding(keybinding: EditorKeybindingDefinition<TEditor>): () => void;
   commands(): EditorCommandDefinition<TEditor, TIcon>[];
   menuDefinitions(): EditorMenuItemDefinition<TEditor>[];
   keybindingDefinitions(): EditorKeybindingDefinition<TEditor>[];
@@ -106,9 +106,10 @@ export function createEditorActionRegistry<
     entries: Map<string, T>,
     id: string,
     value: T,
-  ): void {
+  ): () => void {
     if (entries.has(id)) throw new Error(`Duplicate editor ${kind} id: ${id}`);
     entries.set(id, value);
+    return () => { if (entries.get(id) === value) entries.delete(id); };
   }
 
   return {

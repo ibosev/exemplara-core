@@ -6,6 +6,8 @@ export function createEditorActionRegistry() {
         if (entries.has(id))
             throw new Error(`Duplicate editor ${kind} id: ${id}`);
         entries.set(id, value);
+        return () => { if (entries.get(id) === value)
+            entries.delete(id); };
     }
     return {
         addCommand: (command) => addUnique("command", commands, command.id, command),

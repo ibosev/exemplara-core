@@ -46,6 +46,8 @@ export function renderPageNumber(page, pageIndex, totalPages) {
     return `<div class="ex-page-number" style="${escapeAttr(style)}">${escapeAttr(value)} / ${escapeAttr(formatPageNumber(numbering.start + totalPages - 1, numbering.format))}</div>`;
 }
 function renderPage(doc, page, pageIndex, totalPages, isLastRenderedPage, options, baseCtx) {
+    // `page.guides` is editor alignment data. It is intentionally unread here
+    // so a generated page cannot draw those lines.
     const ctx = {
         ...baseCtx,
         pageIndex,

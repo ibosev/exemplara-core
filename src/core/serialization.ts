@@ -171,6 +171,30 @@ export function validateDocument(doc: unknown): ValidationResult {
         push(`${pagePath}.regions.body`, 'Page requires a body region');
         return;
       }
+      const guides = (page as { guides?: unknown }).guides;
+      if (guides !== undefined) {
+        if (!Array.isArray(guides)) {
+          push(`${pagePath}.guides`, 'Layout guides must be an array');
+        } else {
+          const guideIds = new Set<string>();
+          guides.forEach((guide, index) => {
+            const guidePath = `${pagePath}.guides[${index}]`;
+            if (!isRecord(guide)) {
+              push(guidePath, 'Layout guide must be an object');
+              return;
+            }
+            if (typeof guide.id !== 'string' || !guide.id) push(`${guidePath}.id`, 'Missing guide id');
+            else if (guideIds.has(guide.id)) push(`${guidePath}.id`, `Duplicate guide id: ${guide.id}`);
+            else guideIds.add(guide.id);
+            if (guide.axis !== 'horizontal' && guide.axis !== 'vertical') {
+              push(`${guidePath}.axis`, 'Expected horizontal or vertical');
+            }
+            if (typeof guide.position !== 'number' || !Number.isFinite(guide.position)) {
+              push(`${guidePath}.position`, 'Expected a finite number');
+            }
+          });
+        }
+      }
       for (const name of ['header', 'body', 'footer', 'background'] as const) {
         const region = page.regions[name];
         if (!region) continue;

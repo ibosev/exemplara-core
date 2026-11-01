@@ -13,6 +13,8 @@ export interface EditorPluginMetadata {
     setup(api: never): void | EditorExtensionDisposer;
 }
 export interface EditorPlugin extends EditorPluginMetadata {
+    /** View-only composition entries declare features without installing portable behavior. */
+    metadataOnly?: boolean;
     setup(api: EditorExtensionApi): void | EditorExtensionDisposer;
 }
 export type EditorServiceMap = Readonly<Record<string, unknown>>;

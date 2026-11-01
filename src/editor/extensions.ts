@@ -40,7 +40,8 @@ import {
 } from "./extension-types.js";
 import type { EditorStyleField } from "./style-fields.js";
 import type { ComponentNode } from "../core/types.js";
-import { addUnique } from "./contribution-utils.js";
+import type { EditorPlugin } from "./composition.js";
+import { RegistrationScope, cleanupAll } from "./registration-scope.js";
 
 export type {
   EditorCommandContext,
@@ -87,13 +88,16 @@ export class EditorExtensionRegistry {
     BUILTIN_TEMPLATE_FORMATTERS.map((formatter) => [formatter.name, formatter]),
   );
   #expressionEvaluator: TemplateExpressionEvaluator | undefined;
-  readonly #disposers: EditorExtensionDisposer[] = [];
+  readonly #plugins = new Map<string, RegistrationScope>();
+  readonly #installing = new Set<string>();
+  readonly #rootScope = new RegistrationScope();
+  readonly #scopes = new Set<RegistrationScope>([this.#rootScope]);
+  #view: RegistrationScope | undefined;
+  #session: EditorSession | undefined;
+  #destroyed = false;
+  readonly #createApi: (scope: RegistrationScope) => EditorExtensionApi;
 
   readonly api: EditorExtensionApi;
-  readonly #sessionStarts: Array<
-    (session: EditorSession) => void | EditorExtensionDisposer
-  > = [];
-
   hasViewContribution(
     kind: "inspector-section" | "toolbar-cluster" | "canvas-decoration",
     id: string,
@@ -108,164 +112,316 @@ export class EditorExtensionRegistry {
   }
 
   start(session: EditorSession): void {
-    if (session.destroyed) throw new Error("Cannot start a destroyed editor session.");
-    for (const start of this.#sessionStarts.splice(0)) {
-      const dispose = start(session);
-      if (dispose) this.#disposers.push(dispose);
+    if (session.destroyed || this.#destroyed)
+      throw new Error("Cannot start a destroyed editor session.");
+    this.#session = session;
+    for (const scope of this.#scopes) scope.start(session);
+  }
+
+  /** Portable installation is atomic and belongs to the session, including fallback installs. */
+  install(plugin: EditorPlugin): void {
+    this.#assertActive();
+    if (this.#plugins.has(plugin.id)) return;
+    if (this.#installing.has(plugin.id))
+      throw new Error(`Circular editor plugin installation: ${plugin.id}`);
+    this.#transaction(() => {
+      this.#installing.add(plugin.id);
+      try {
+        this.#plugins.set(plugin.id, this.#setup([plugin.setup]));
+      } finally {
+        this.#installing.delete(plugin.id);
+      }
+    });
+  }
+
+  /** Replace the current view's registrations; failed setup restores the previous view. */
+  attach(...extensions: readonly EditorExtension[]): EditorExtensionDisposer {
+    this.#assertActive();
+    const previous = this.#view;
+    let scope: RegistrationScope;
+    try {
+      previous?.deactivate();
+      scope = this.#transaction(() => this.#setup(extensions));
+    } catch (error) {
+      this.#rethrow(error, [() => previous?.activate()]);
     }
+    this.#view = scope;
+    return () => {
+      if (this.#view === scope) this.#view = undefined;
+      this.#scopes.delete(scope);
+      scope.dispose();
+    };
+  }
+
+  #assertActive(): void {
+    if (this.#destroyed)
+      throw new Error("Editor plugin registry has been destroyed.");
+  }
+
+  #setup(extensions: readonly EditorExtension[]): RegistrationScope {
+    const scope = new RegistrationScope(this.#rootScope);
+    this.#scopes.add(scope);
+    try {
+      const api = this.#createApi(scope);
+      for (const extension of extensions) scope.setup(extension, api);
+      if (this.#session) scope.start(this.#session);
+      // Parents clean up before portable dependencies installed during their setup.
+      this.#scopes.delete(scope);
+      this.#scopes.add(scope);
+      return scope;
+    } catch (error) {
+      this.#scopes.delete(scope);
+      this.#rethrow(error, [() => scope.dispose()]);
+    }
+  }
+
+  #transaction<T>(setup: () => T): T {
+    const previous = new Set(this.#scopes);
+    try {
+      return setup();
+    } catch (error) {
+      const added = [...this.#scopes].filter((scope) => !previous.has(scope));
+      for (const [id, scope] of this.#plugins)
+        if (!previous.has(scope)) this.#plugins.delete(id);
+      for (const scope of added) this.#scopes.delete(scope);
+      this.#rethrow(
+        error,
+        added.reverse().map((scope) => () => scope.dispose()),
+      );
+    }
+  }
+
+  #rethrow(error: unknown, cleanups: readonly (() => void)[]): never {
+    try {
+      cleanupAll(cleanups);
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        error instanceof Error ? error.message : String(error),
+        { cause: error },
+      );
+    }
+    throw error;
+  }
+
+  #invalidateViews(): void {
+    this.#sortedPanels = undefined;
+    this.#sortedInspectorSections = undefined;
+    this.#sortedToolbarClusters = undefined;
+    this.#sortedCanvasDecorations = undefined;
   }
 
   constructor(
     componentRegistry: ComponentRegistry,
-    extensions: readonly EditorExtension[] = [],
+    extensions: readonly (EditorExtension | EditorPlugin)[] = [],
     options: EditorExtensionRegistryOptions = {},
   ) {
     const policy = options.policy ?? createAllowAllCapabilityPolicy();
     const services = options.services ?? {};
     const renderRuntime = options.renderRuntime ?? legacyRenderRuntime();
-    const api: EditorExtensionApi = {
-      policy,
-      onSession: (start) => this.#sessionStarts.push(start),
-      hasCapability: (capability) => policy.allows(capability),
-      getService: <T = unknown>(id: string) => services[id] as T | undefined,
-      addBindingTransform: (name, transform) =>
-        renderRuntime.transforms.register(name, transform),
-      addComponent: (definition, renderer, rendererOptions) => {
-        componentRegistry.register(definition);
-        if (renderer)
-          renderRuntime.renderers.register(
+    this.#createApi = (scope) => {
+      const set = <T>(entries: Map<string, T>, id: string, value: T): void => {
+        scope.set(
+          entries,
+          id,
+          () => entries.get(id),
+          (entry) => {
+            if (entry === undefined) entries.delete(id);
+            else entries.set(id, entry);
+            this.#invalidateViews();
+          },
+          value,
+        );
+      };
+      const add = <T>(
+        kind: string,
+        entries: Map<string, T>,
+        id: string,
+        value: T,
+      ): void => {
+        if (entries.has(id))
+          throw new Error(`Duplicate editor ${kind} id: ${id}`);
+        set(entries, id, value);
+      };
+      const api: EditorExtensionApi = {
+        policy,
+        installCore: (plugin) => this.install(plugin),
+        onSession: (start) => scope.onSession(start),
+        hasCapability: (capability) => policy.allows(capability),
+        getService: <T = unknown>(id: string) => services[id] as T | undefined,
+        addBindingTransform: (name, transform) =>
+          scope.set(
+            renderRuntime.transforms,
+            name,
+            () => renderRuntime.transforms.get(name),
+            (value) => {
+              if (value) renderRuntime.transforms.register(name, value);
+              else renderRuntime.transforms.unregister(name);
+            },
+            transform,
+          ),
+        addComponent: (definition, renderer, rendererOptions) => {
+          scope.set(
+            componentRegistry,
             definition.type,
-            renderer,
-            rendererOptions,
+            () => componentRegistry.get(definition.type),
+            (value) => {
+              if (value) componentRegistry.register(value);
+              else componentRegistry.unregister(definition.type);
+            },
+            definition,
           );
-      },
-      addBlock: (block) => addUnique("block", this.#blocks, block.id, block),
-      addPanel: (panel) => {
-        if (this.#panels.has(panel.id))
-          throw new Error(`Duplicate editor panel id: ${panel.id}`);
-        this.#sortedPanels = undefined;
-        this.#panels.set(panel.id, panel);
-      },
-      addInspectorSection: (section) => {
-        if (this.#inspectorSections.has(section.id)) {
-          throw new Error(
-            `Duplicate editor inspector section id: ${section.id}`,
-          );
-        }
-        this.#sortedInspectorSections = undefined;
-        this.#inspectorSections.set(section.id, section);
-      },
-      addToolbarCluster: (cluster) => {
-        if (this.#toolbarClusters.has(cluster.id)) {
-          throw new Error(`Duplicate editor toolbar cluster id: ${cluster.id}`);
-        }
-        this.#sortedToolbarClusters = undefined;
-        this.#toolbarClusters.set(cluster.id, cluster);
-      },
-      addCanvasDecoration: (decoration) => {
-        if (this.#canvasDecorations.has(decoration.id)) {
-          throw new Error(
-            `Duplicate editor canvas decoration id: ${decoration.id}`,
-          );
-        }
-        this.#sortedCanvasDecorations = undefined;
-        this.#canvasDecorations.set(decoration.id, decoration);
-      },
-      addCommand: (command) => this.#actions.addCommand(command),
-      addMenuItem: (item) => this.#actions.addMenuItem(item),
-      addKeybinding: (keybinding) => this.#actions.addKeybinding(keybinding),
-      addOutlineAction: (action) => {
-        addUnique("outline action", this.#outlineActions, action.id, action);
-        const commandId = action.id;
-        this.#actions.addCommand({
-          id: commandId,
-          label: action.label,
-          icon: action.icon,
-          danger: action.danger,
-          canRun: (editor, context) => {
-            const node = context.nodeId
-              ? findNode(editor.doc, context.nodeId)
-              : null;
-            return !!node && (action.canRun?.(editor, node) ?? true);
-          },
-          execute: (editor, context) => {
-            const node = context.nodeId
-              ? findNode(editor.doc, context.nodeId)
-              : null;
-            return node ? action.execute(editor, node) : false;
-          },
-        });
-        const placement = action.placement ?? "menu";
-        if (placement === "menu" || placement === "both") {
-          this.#actions.addMenuItem({
-            id: `${action.id}.context`,
-            commandId,
-            location: "node.context",
-            group: "10.contextual",
-            order: 80,
+          if (renderer)
+            scope.set(
+              renderRuntime.renderers,
+              definition.type,
+              () => renderRuntime.renderers.get(definition.type),
+              (value) => {
+                if (value)
+                  renderRuntime.renderers.register(
+                    definition.type,
+                    value.render,
+                    value,
+                  );
+                else renderRuntime.renderers.unregister(definition.type);
+              },
+              {
+                render: renderer,
+                managesChildren: rendererOptions?.managesChildren ?? false,
+              },
+              (a, b) =>
+                a?.render === b?.render &&
+                a?.managesChildren === b?.managesChildren,
+            );
+        },
+        addBlock: (block) => add("block", this.#blocks, block.id, block),
+        addPanel: (panel) => add("panel", this.#panels, panel.id, panel),
+        addInspectorSection: (section) =>
+          add(
+            "inspector section",
+            this.#inspectorSections,
+            section.id,
+            section,
+          ),
+        addToolbarCluster: (cluster) =>
+          add("toolbar cluster", this.#toolbarClusters, cluster.id, cluster),
+        addCanvasDecoration: (decoration) =>
+          add(
+            "canvas decoration",
+            this.#canvasDecorations,
+            decoration.id,
+            decoration,
+          ),
+        addCommand: (command) =>
+          scope.register(() => this.#actions.addCommand(command)),
+        addMenuItem: (item) =>
+          scope.register(() => this.#actions.addMenuItem(item)),
+        addKeybinding: (keybinding) =>
+          scope.register(() => this.#actions.addKeybinding(keybinding)),
+        addOutlineAction: (action) => {
+          add("outline action", this.#outlineActions, action.id, action);
+          const commandId = action.id;
+          api.addCommand({
+            id: commandId,
+            label: action.label,
+            icon: action.icon,
+            danger: action.danger,
+            canRun: (editor, context) => {
+              const node = context.nodeId
+                ? findNode(editor.doc, context.nodeId)
+                : null;
+              return !!node && (action.canRun?.(editor, node) ?? true);
+            },
+            execute: (editor, context) => {
+              const node = context.nodeId
+                ? findNode(editor.doc, context.nodeId)
+                : null;
+              return node ? action.execute(editor, node) : false;
+            },
           });
-        }
-        if (placement === "toolbar" || placement === "both") {
-          this.#actions.addMenuItem({
-            id: `${action.id}.inline`,
-            commandId,
-            location: "node.inline",
-            group: "20.extensions",
-            order: 50,
-          });
-        }
-      },
-      addAutocompleteProvider: (provider) =>
-        addUnique(
-          "autocomplete provider",
-          this.#autocompleteProviders,
-          provider.id,
-          provider,
-        ),
-      addStyleField: (field) =>
-        addUnique("style field", this.#styleFields, field.id, field),
-      addFormatter: (formatter) =>
-        addUnique("formatter", this.#formatters, formatter.name, formatter),
-      replaceFormatter: (formatter) => {
-        if (!this.#formatters.has(formatter.name)) {
-          throw new Error(
-            `Cannot replace unknown editor formatter id: ${formatter.name}`,
+          const placement = action.placement ?? "menu";
+          if (placement === "menu" || placement === "both") {
+            api.addMenuItem({
+              id: `${action.id}.context`,
+              commandId,
+              location: "node.context",
+              group: "10.contextual",
+              order: 80,
+            });
+          }
+          if (placement === "toolbar" || placement === "both") {
+            api.addMenuItem({
+              id: `${action.id}.inline`,
+              commandId,
+              location: "node.inline",
+              group: "20.extensions",
+              order: 50,
+            });
+          }
+        },
+        addAutocompleteProvider: (provider) =>
+          add(
+            "autocomplete provider",
+            this.#autocompleteProviders,
+            provider.id,
+            provider,
+          ),
+        addStyleField: (field) =>
+          add("style field", this.#styleFields, field.id, field),
+        addFormatter: (formatter) =>
+          add("formatter", this.#formatters, formatter.name, formatter),
+        replaceFormatter: (formatter) => {
+          if (!this.#formatters.has(formatter.name)) {
+            throw new Error(
+              `Cannot replace unknown editor formatter id: ${formatter.name}`,
+            );
+          }
+          set(this.#formatters, formatter.name, formatter);
+        },
+        setExpressionEvaluator: (evaluator) => {
+          if (this.#expressionEvaluator) {
+            throw new Error(
+              "Duplicate editor expression evaluator registration.",
+            );
+          }
+          scope.set(
+            this,
+            "expression-evaluator",
+            () => this.#expressionEvaluator,
+            (value) => {
+              this.#expressionEvaluator = value;
+            },
+            evaluator,
           );
-        }
-        this.#formatters.set(formatter.name, formatter);
-      },
-      setExpressionEvaluator: (evaluator) => {
-        if (this.#expressionEvaluator) {
-          throw new Error(
-            "Duplicate editor expression evaluator registration.",
-          );
-        }
-        this.#expressionEvaluator = evaluator;
-      },
+        },
+      };
+      return api;
     };
-    this.api = api;
+    this.api = this.#createApi(this.#rootScope);
     try {
       for (const extension of extensions) {
-        const dispose = extension(api);
-        if (dispose) this.#disposers.push(dispose);
+        if (typeof extension === "function")
+          this.#transaction(() => this.#setup([extension]));
+        else if (!extension.metadataOnly) this.install(extension);
       }
     } catch (error) {
-      this.destroy();
-      throw error;
+      this.#rethrow(error, [() => this.destroy()]);
     }
   }
 
   destroy(): void {
-    this.#sessionStarts.length = 0;
-    const errors: unknown[] = [];
-    for (const dispose of this.#disposers.splice(0).reverse()) {
-      try { dispose(); } catch (error) { errors.push(error); }
-    }
-    if (errors.length) throw new AggregateError(errors, "Editor session cleanup failed.");
+    if (this.#destroyed) return;
+    this.#destroyed = true;
+    this.#view = undefined;
+    this.#session = undefined;
+    this.#plugins.clear();
+    const scopes = [...this.#scopes].reverse();
+    this.#scopes.clear();
+    cleanupAll(scopes.map((scope) => () => scope.dispose()));
   }
 
   get panels(): EditorPanelDefinition[] {
-    // Contributions only register during construction, so the sort is cached.
+    // Registration changes invalidate the cached order.
     this.#sortedPanels ??= [...this.#panels.values()].sort(
       (a, b) =>
         (a.order ?? DEFAULT_PANEL_ORDER) - (b.order ?? DEFAULT_PANEL_ORDER),

@@ -469,7 +469,7 @@ export class EditorSession {
     this.ui = new EditorUiState(this);
     this.extensions = new EditorExtensionRegistry(
       this.registry,
-      this.composition.plugins.map((plugin) => plugin.setup),
+      this.composition.plugins,
       {
         policy: this.composition.policy,
         services: this.composition.services,
@@ -541,12 +541,12 @@ export class EditorSession {
     this.#state.inputs.destroyed.set(true);
     this.#inlineExpressionTarget = null;
     this.#view = null;
+    this.#stopRegistry();
     try {
       this.extensions.destroy();
     } finally {
       this.engine.destroy();
       this.#stopEngine();
-      this.#stopRegistry();
       this.ui.destroy();
     }
   }

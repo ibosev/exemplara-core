@@ -7,6 +7,7 @@ import type { BindingAutocompleteTrigger } from "../shared/binding-authoring.js"
 import type { TemplateExpressionEvaluator, TemplateExpressionFormatter, TemplateExpressionRuntime } from "../shared/expression.js";
 import type { EditorCommandDefinition, EditorKeybindingDefinition, EditorMenuItemDefinition } from "./actions.js";
 import type { EditorSession } from "./session.js";
+import type { EditorPlugin } from "./composition.js";
 import type { EditorStyleField } from "./style-fields.js";
 export interface EditorPanelProps {
     editor: EditorSession;
@@ -125,6 +126,8 @@ export interface EditorAutocompleteProvider {
 }
 export interface EditorExtensionApi {
     readonly policy: CapabilityPolicy;
+    /** Install portable behavior once for the owning session. */
+    installCore: (plugin: EditorPlugin) => void;
     /** Start once after the session has been initialized. Return a disposer. */
     onSession: (start: (session: EditorSession) => void | EditorExtensionDisposer) => void;
     hasCapability: (capability: CapabilityId) => boolean;

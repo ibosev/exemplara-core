@@ -28,6 +28,8 @@ export interface EditorPluginMetadata {
 }
 
 export interface EditorPlugin extends EditorPluginMetadata {
+  /** View-only composition entries declare features without installing portable behavior. */
+  metadataOnly?: boolean;
   setup(api: EditorExtensionApi): void | EditorExtensionDisposer;
 }
 

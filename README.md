@@ -2,6 +2,8 @@
 
 MIT-licensed, framework-independent document model, command engine, HTML/CSS renderer, shared authoring utilities, and editor sessions backed by Nano Stores. No Svelte runtime or types are required by `exemplara-core`, `/core`, `/renderer`, `/shared`, or `/editor`.
 
+See the [changelog](CHANGELOG.md) for release changes, compatibility guidance, and verification results.
+
 ```ts
 import { EditorSession, createFullEditorPreset } from 'exemplara-core/editor';
 import { render } from 'exemplara-core/renderer';
@@ -36,6 +38,8 @@ Detaching a view preserves drafts/preferences and clears view scheduling/drag ha
 
 Portable plugins use `composeEditor({ plugins, services, policy })`; their `setup(api)` registers commands, menus, keybindings, block factories, renderers, transforms, style fields, autocomplete providers, and framework-independent panel metadata. `api.onSession(session => disposer)` starts a service once, after initialization. Core presets provide the structural metadata and editing commands. Proprietary features remain in the separate `exemplara-plugins/core` package.
 
+`session.extensions.install(plugin)` and `api.installCore(plugin)` install portable behavior once per plugin ID, with cleanup when the session is destroyed. Wrappers use `session.extensions.attach(...extensions)` for view behavior; its returned disposer removes those registrations and releases view resources. A replacement attachment uses fresh callbacks. Failed setup restores managed registrations and permits retry, including portable plugins installed during that attempt. Plugins must clean up resources acquired before their setup throws; the registry can only invoke disposers that setup returned.
+
 The shared barrel contains pure utilities. Browser utilities such as `/shared/html-import`, `/shared/preview`, `/shared/dom`, and measurement helpers are explicit opt-in leaves and require their platform APIs when called. PDF execution belongs to `exemplara-plugins/pdf` and Node/Chromium, not this package.
 
 Development from the sibling checkouts:
@@ -47,4 +51,4 @@ pnpm check
 pnpm test:run
 ```
 
-The Svelte package's `pnpm check:state` audits the complete wrapper/private-plugin/playground source graph and rejects application Rune state, local component state, state constructors outside core, and disclosures without a core owner. `pnpm test:packages` builds and packs all three packages, installs isolated consumers, checks headless declarations and browser bundles, builds and runs two isolated Svelte editors, and generates a PDF from the headless tarballs. `pnpm test:browser` verifies editing and view reattachment in the sibling playground. Both certification scripts require Chrome (`/usr/bin/google-chrome` or `EXEMPLARA_CHROMIUM_PATH`). Publish `exemplara-core@0.1.0` before `exemplara-svelte@0.2.1`; the private plugins depend on the public core but are never re-exported from it.
+The Svelte package's `pnpm check:state` audits the complete wrapper/private-plugin/playground source graph and rejects application Rune state, local component state, state constructors outside core, and disclosures without a core owner. `pnpm test:packages` builds and packs all three packages, installs isolated consumers, checks headless declarations and browser bundles, builds and runs two isolated Svelte editors, and generates a PDF from the headless tarballs. `pnpm test:browser` verifies editing and view reattachment in the sibling playground. Both certification scripts require Chrome (`/usr/bin/google-chrome` or `EXEMPLARA_CHROMIUM_PATH`). Publish `exemplara-core@0.1.1` before `exemplara-svelte@0.3.3`; the wrapper requires the new attachment API. The private plugins depend on the public core but are never re-exported from it.

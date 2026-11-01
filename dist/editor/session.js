@@ -327,7 +327,7 @@ export class EditorSession {
         this.#state = createSessionStores(this.engine, this.registry, this.composition);
         this.stores = this.#state.stores;
         this.ui = new EditorUiState(this);
-        this.extensions = new EditorExtensionRegistry(this.registry, this.composition.plugins.map((plugin) => plugin.setup), {
+        this.extensions = new EditorExtensionRegistry(this.registry, this.composition.plugins, {
             policy: this.composition.policy,
             services: this.composition.services,
             renderRuntime: this.renderRuntime,
@@ -394,13 +394,13 @@ export class EditorSession {
         this.#state.inputs.destroyed.set(true);
         this.#inlineExpressionTarget = null;
         this.#view = null;
+        this.#stopRegistry();
         try {
             this.extensions.destroy();
         }
         finally {
             this.engine.destroy();
             this.#stopEngine();
-            this.#stopRegistry();
             this.ui.destroy();
         }
     }

@@ -48,9 +48,9 @@ export interface EditorKeyInput {
     altKey?: boolean;
 }
 export interface EditorActionRegistry<TEditor = EditorSession, TIcon = string> {
-    addCommand(command: EditorCommandDefinition<TEditor, TIcon>): void;
-    addMenuItem(item: EditorMenuItemDefinition<TEditor>): void;
-    addKeybinding(keybinding: EditorKeybindingDefinition<TEditor>): void;
+    addCommand(command: EditorCommandDefinition<TEditor, TIcon>): () => void;
+    addMenuItem(item: EditorMenuItemDefinition<TEditor>): () => void;
+    addKeybinding(keybinding: EditorKeybindingDefinition<TEditor>): () => void;
     commands(): EditorCommandDefinition<TEditor, TIcon>[];
     menuDefinitions(): EditorMenuItemDefinition<TEditor>[];
     keybindingDefinitions(): EditorKeybindingDefinition<TEditor>[];

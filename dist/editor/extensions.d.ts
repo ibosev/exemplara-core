@@ -4,9 +4,10 @@ import type { EditorSession } from "./session.js";
 import { type RenderRuntime } from "../renderer/runtime.js";
 import { type CapabilityPolicy } from "../core/capabilities.js";
 import { type EditorCommandContext, type EditorCommandDefinition, type EditorKeybindingDefinition, type EditorKeyInput, type EditorMenuItemDefinition, type EditorMenuLocation, type ResolvedEditorMenuItem } from "./actions.js";
-import { type EditorAutocompleteProvider, type EditorBlockDefinition, type EditorExtension, type EditorExtensionApi, type EditorCanvasDecorationDefinition, type EditorInspectorSectionDefinition, type EditorOutlineAction, type EditorPanelDefinition, type EditorToolbarClusterDefinition } from "./extension-types.js";
+import { type EditorAutocompleteProvider, type EditorBlockDefinition, type EditorExtension, type EditorExtensionApi, type EditorExtensionDisposer, type EditorCanvasDecorationDefinition, type EditorInspectorSectionDefinition, type EditorOutlineAction, type EditorPanelDefinition, type EditorToolbarClusterDefinition } from "./extension-types.js";
 import type { EditorStyleField } from "./style-fields.js";
 import type { ComponentNode } from "../core/types.js";
+import type { EditorPlugin } from "./composition.js";
 export type { EditorCommandContext, EditorCommandDefinition, EditorKeybindingDefinition, EditorKeyInput, EditorMenuItemDefinition, EditorMenuLocation, ResolvedEditorMenuItem, } from "./actions.js";
 export * from "./extension-types.js";
 export interface EditorExtensionRegistryOptions {
@@ -20,7 +21,11 @@ export declare class EditorExtensionRegistry {
     readonly api: EditorExtensionApi;
     hasViewContribution(kind: "inspector-section" | "toolbar-cluster" | "canvas-decoration", id: string): boolean;
     start(session: EditorSession): void;
-    constructor(componentRegistry: ComponentRegistry, extensions?: readonly EditorExtension[], options?: EditorExtensionRegistryOptions);
+    /** Portable installation is atomic and belongs to the session, including fallback installs. */
+    install(plugin: EditorPlugin): void;
+    /** Replace the current view's registrations; failed setup restores the previous view. */
+    attach(...extensions: readonly EditorExtension[]): EditorExtensionDisposer;
+    constructor(componentRegistry: ComponentRegistry, extensions?: readonly (EditorExtension | EditorPlugin)[], options?: EditorExtensionRegistryOptions);
     destroy(): void;
     get panels(): EditorPanelDefinition[];
     panelsFor(placement: EditorPanelDefinition["placement"]): EditorPanelDefinition[];
