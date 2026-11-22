@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.1.2 — 2026-11-22
+
+Dependency maintenance. No API or behavior changes.
+
+- `nanostores` 1.5.4 → 1.5.5 (still pinned exactly, so wrappers share one store implementation).
+- Built with TypeScript 6.0.3.
+
 ## 0.1.1 — 2026-10-10
 
 Architecture review follow-up for the Svelte and Solid wrappers. Recorded on 2026-10-11 from the implementation, regression tests, and release verification logs.

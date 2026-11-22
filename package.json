@@ -1,6 +1,6 @@
 {
   "name": "exemplara-core",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "Framework-independent Exemplara document engine, renderer and Nano Stores editor sessions",
   "license": "MIT",
   "author": "Ivaylo Bosev",
@@ -59,10 +59,10 @@
     "test:run": "node --test tests/*.test.mjs"
   },
   "dependencies": {
-    "nanostores": "1.5.4"
+    "nanostores": "1.5.5"
   },
   "devDependencies": {
-    "typescript": "^5.9.2"
+    "typescript": "^6.0.3"
   },
   "engines": {
     "node": "^20.0.0 || >=22.0.0"
